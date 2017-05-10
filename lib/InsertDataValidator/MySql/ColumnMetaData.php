@@ -1,38 +1,29 @@
 <?php
 
-namespace InsertDataValidator;
+namespace InsertDataValidator\MySql;
 
 
+use InsertDataValidator\ColumnMetaDataInterface;
 use InsertDataValidator\Exception\UnsupportedTypeException;
-use UnexpectedValueException;
 
-class Column
+class ColumnMetaData implements ColumnMetaDataInterface
 {
-    const TYPE_INTEGER   = 0;
-    const TYPE_DECIMAL   = 1;
-    const TYPE_STRING    = 2;
-    const TYPE_DATE      = 3;
-    const TYPE_DATETIME  = 4;
-    const TYPE_TIME      = 5;
-    const TYPE_TIMESTAMP = 6;
-    const TYPE_YEAR      = 7;
+    const DATA_TYPE_BIT       = 'bit';
+    const DATA_TYPE_TINYINT   = 'tinyint';
+    const DATA_TYPE_SMALLINT  = 'smallint';
+    const DATA_TYPE_MEDIUMINT = 'mediumint';
+    const DATA_TYPE_INT       = 'int';
+    const DATA_TYPE_BIGINT    = 'bigint';
 
-    const DATA_TYPE_BIT        = 'bit';
-    const DATA_TYPE_TINYINT    = 'tinyint';
-    const DATA_TYPE_SMALLINT   = 'smallint';
-    const DATA_TYPE_MEDIUMINT  = 'mediumint';
-    const DATA_TYPE_INT        = 'int';
-    const DATA_TYPE_BIGINT     = 'bigint';
+    const DATA_TYPE_DECIMAL = 'decimal';
+    const DATA_TYPE_FLOAT   = 'float';
+    const DATA_TYPE_DOUBLE  = 'double';
 
-    const DATA_TYPE_DECIMAL    = 'decimal';
-    const DATA_TYPE_FLOAT      = 'float';
-    const DATA_TYPE_DOUBLE     = 'double';
-
-    const DATA_TYPE_DATE       = 'date';
-    const DATA_TYPE_DATETIME   = 'datetime';
-    const DATA_TYPE_TIME       = 'time';
-    const DATA_TYPE_TIMESTAMP  = 'timestamp';
-    const DATA_TYPE_YEAR       = 'year';
+    const DATA_TYPE_DATE      = 'date';
+    const DATA_TYPE_DATETIME  = 'datetime';
+    const DATA_TYPE_TIME      = 'time';
+    const DATA_TYPE_TIMESTAMP = 'timestamp';
+    const DATA_TYPE_YEAR      = 'year';
 
     const DATA_TYPE_CHAR       = 'char';
     const DATA_TYPE_VARCHAR    = 'varchar';
@@ -85,28 +76,60 @@ class Column
         self::DATA_TYPE_TIMESTAMP => '1970-01-01 00:00:01',
     ];
 
-    public function extractDataType($schemaTypeOf)
+
+    /**
+     * @var
+     */
+    private $columnName;
+    /**
+     * @var
+     */
+    private $schemaType;
+    /**
+     * @var
+     */
+    private $allowableNull;
+
+    public function __construct($columnName, $schemaType, $allowableNull)
     {
-        if (preg_match('/^(.*?)(\(.+\))?$/', $schemaTypeOf, $matches)) {
-            return strtolower($matches[1]);
-        }
-        assert(false, 'Unexpected schemaType format. schemaType = ' . $schemaTypeOf);
+        $this->columnName = strtolower($columnName);
+        $this->schemaType = strtolower($schemaType);
+        $this->allowableNull = strtolower($allowableNull);
     }
 
-    public function extractMaxLength($schemaType)
+    public function extractDataType()
     {
-        if (preg_match('/^.*\((\d+)\).*$/', $schemaType, $matches)) {
+        if (preg_match('/^(.*?)(\(.+\))?$/', $this->schemaType, $matches)) {
+            return $matches[1];
+        }
+        assert(false, 'Unexpected schemaType format. schemaType = ' . $this->schemaType);
+    }
+
+    public function extractMaxLength()
+    {
+        if (preg_match('/^.*\((\d+)\).*$/', $this->schemaType, $matches)) {
             return (int)$matches[1];
         }
-        assert(false, sprintf('Logic error. type = %s', $schemaType));
+        assert(false, sprintf('Logic error. type = %s', $this->schemaType));
     }
 
-    public function isUnsigned($schemaTypeOf)
+    public function getMaxValue($dataType)
     {
-        return stripos('unsigned', $schemaTypeOf) !== false;
+        $maxValue = self::MAX_VALUE[$dataType];
+        return $this->isUnsigned() ? $maxValue * 2 + 1 : $maxValue;
     }
 
-    function getRoughlyType($dataType)
+    public function isUnsigned()
+    {
+        return stripos('unsigned', $this->schemaType) !== false;
+    }
+
+    public function getMinValue($dataType)
+    {
+        return $this->isUnsigned() ? 0 : self::MIN_VALUE[$dataType];
+    }
+
+    public function getRoughlyType($dataType)
     {
         if ($this->isTypeOfTinyInt($dataType) ||
             $this->isTypeOfSmallInt($dataType) ||
@@ -114,28 +137,32 @@ class Column
             $this->isTypeOfInt($dataType) ||
             $this->isTypeOfBigInt($dataType)
         ) {
-            return Column::TYPE_INTEGER;
+            return self::TYPE_INTEGER;
         }
 
         if ($this->isTypeOfFloat($dataType) ||
             $this->isTypeOfDouble($dataType) ||
             $this->isTypeOfDecimal($dataType)
         ) {
-            return Column::TYPE_DECIMAL;
+            return self::TYPE_DECIMAL;
         }
 
         if ($this->isTypeOfChar($dataType) ||
             $this->isTypeOfVarChar($dataType)
         ) {
-            return Column::TYPE_STRING;
+            return self::TYPE_STRING;
         }
-        if ($this->isTypeOfDate($dataType) ||
-            $this->isTypeOfDateTime($dataType) ||
-            $this->isTypeOfTime($dataType) ||
-            $this->isTypeOfTimeStamp($dataType) ||
-            $this->isTypeOfYear($dataType)
-        ) {
-            return Column::TYPE_DATE;
+        if ($this->isTypeOfDate($dataType)) {
+            return self::TYPE_DATE;
+        }
+        if ($this->isTypeOfDateTime($dataType)) {
+            return self::TYPE_DATETIME;
+        }
+        if ($this->isTypeOfTime($dataType)) {
+            return self::TYPE_TIME;
+        }
+        if ($this->isTypeOfYear($dataType)) {
+            return self::TYPE_DATE;
         }
         if (
             $this->isTypeOfBit($dataType) ||
@@ -152,164 +179,159 @@ class Column
             $this->isTypeOfEnum($dataType) ||
             $this->isTypeOfSet($dataType)
         ) {
-            // TODO Implements Unsupported Type Exception
             throw new UnsupportedTypeException('Unsupported type. type = ' . $dataType);
         }
 
-        throw new UnexpectedValueException('Unexpected value. type = ' . $dataType);
+        throw new \UnexpectedValueException('Unexpected value. type = ' . $dataType);
     }
 
     public function isTypeOfTinyInt($dataType)
     {
-        return $dataType === Column::DATA_TYPE_TINYINT;
+        return $dataType === self::DATA_TYPE_TINYINT;
     }
 
     public function isTypeOfSmallInt($dataType)
     {
-        return $dataType === Column::DATA_TYPE_SMALLINT;
+        return $dataType === self::DATA_TYPE_SMALLINT;
     }
 
     public function isTypeOfMediumInt($dataType)
     {
-        return $dataType === Column::DATA_TYPE_MEDIUMINT;
+        return $dataType === self::DATA_TYPE_MEDIUMINT;
     }
 
     public function isTypeOfInt($dataType)
     {
-        return $dataType === Column::DATA_TYPE_INT;
+        return $dataType === self::DATA_TYPE_INT;
     }
 
     public function isTypeOfBigInt($dataType)
     {
-        return $dataType === Column::DATA_TYPE_BIGINT;
+        return $dataType === self::DATA_TYPE_BIGINT;
     }
 
     public function isTypeOfFloat($dataType)
     {
-        return $dataType === Column::DATA_TYPE_FLOAT;
+        return $dataType === self::DATA_TYPE_FLOAT;
     }
 
     public function isTypeOfDouble($dataType)
     {
-        return $dataType === Column::DATA_TYPE_DOUBLE;
+        return $dataType === self::DATA_TYPE_DOUBLE;
     }
 
     public function isTypeOfDecimal($dataType)
     {
-        return $dataType === Column::DATA_TYPE_DECIMAL;
+        return $dataType === self::DATA_TYPE_DECIMAL;
     }
 
     public function isTypeOfChar($dataType)
     {
-        return $dataType === Column::DATA_TYPE_CHAR;
+        return $dataType === self::DATA_TYPE_CHAR;
     }
 
     public function isTypeOfVarChar($dataType)
     {
-        return $dataType === Column::DATA_TYPE_VARCHAR;
+        return $dataType === self::DATA_TYPE_VARCHAR;
     }
 
     public function isTypeOfDate($dataType)
     {
-        return $dataType === Column::DATA_TYPE_DATE;
+        return $dataType === self::DATA_TYPE_DATE;
     }
 
     public function isTypeOfDateTime($dataType)
     {
-        return $dataType === Column::DATA_TYPE_DATETIME;
+        return $dataType === self::DATA_TYPE_DATETIME;
     }
 
     public function isTypeOfTime($dataType)
     {
-        return $dataType === Column::DATA_TYPE_TIME;
-    }
-
-    public function isTypeOfTimeStamp($dataType)
-    {
-        return $dataType === Column::DATA_TYPE_TIMESTAMP;
+        return $dataType === self::DATA_TYPE_TIME;
     }
 
     public function isTypeOfYear($dataType)
     {
-        return $dataType === Column::DATA_TYPE_YEAR;
+        return $dataType === self::DATA_TYPE_YEAR;
     }
 
     public function isTypeOfBit($dataType)
     {
-        return $dataType === Column::DATA_TYPE_BIT;
+        return $dataType === self::DATA_TYPE_BIT;
     }
 
     public function isTypeOfBinary($dataType)
     {
-        return $dataType === Column::DATA_TYPE_BINARY;
+        return $dataType === self::DATA_TYPE_BINARY;
     }
 
     public function isTypeOfVarBinary($dataType)
     {
-        return $dataType === Column::DATA_TYPE_VARBINARY;
+        return $dataType === self::DATA_TYPE_VARBINARY;
     }
 
     public function isTypeOfTinyText($dataType)
     {
-        return $dataType === Column::DATA_TYPE_TINYTEXT;
+        return $dataType === self::DATA_TYPE_TINYTEXT;
     }
 
     public function isTypeOfText($dataType)
     {
-        return $dataType === Column::DATA_TYPE_TEXT;
+        return $dataType === self::DATA_TYPE_TEXT;
     }
 
     public function isTypeOfMediumText($dataType)
     {
-        return $dataType === Column::DATA_TYPE_MEDIUMTEXT;
+        return $dataType === self::DATA_TYPE_MEDIUMTEXT;
     }
 
     public function isTypeOfLongText($dataType)
     {
-        return $dataType === Column::DATA_TYPE_LONGTEXT;
+        return $dataType === self::DATA_TYPE_LONGTEXT;
     }
 
     public function isTypeOfTinyBinary($dataType)
     {
-        return $dataType === Column::DATA_TYPE_TINYBLOB;
+        return $dataType === self::DATA_TYPE_TINYBLOB;
     }
 
     public function isTypeOfBlob($dataType)
     {
-        return $dataType === Column::DATA_TYPE_BLOB;
+        return $dataType === self::DATA_TYPE_BLOB;
     }
 
     public function isTypeOfMediumBlob($dataType)
     {
-        return $dataType === Column::DATA_TYPE_MEDIUMBLOB;
+        return $dataType === self::DATA_TYPE_MEDIUMBLOB;
     }
 
     public function isTypeOfLongBlob($dataType)
     {
-        return $dataType === Column::DATA_TYPE_LONGBLOB;
+        return $dataType === self::DATA_TYPE_LONGBLOB;
     }
 
     public function isTypeOfEnum($dataType)
     {
-        return $dataType === Column::DATA_TYPE_ENUM;
+        return $dataType === self::DATA_TYPE_ENUM;
     }
 
     public function isTypeOfSet($dataType)
     {
-        return $dataType === Column::DATA_TYPE_SET;
+        return $dataType === self::DATA_TYPE_SET;
     }
 
-    public function getMaxValue($dataType, $isUnsigned)
+    public function getColumnName()
     {
-        $maxValue = Column::MAX_VALUE[$dataType];
-        return $isUnsigned ? $maxValue * 2 + 1 : $maxValue;
+        return $this->columnName;
     }
 
-    public function getMinValue($dataType, $isUnsigned)
+    public function isAllowableNull()
     {
-        if ($isUnsigned) {
-            return 0;
-        }
-        return Column::MIN_VALUE[$dataType];
+        return $this->allowableNull === 'yes';
+    }
+
+    public function isTypeOfTimeStamp($dataType)
+    {
+        return $dataType === self::DATA_TYPE_TIMESTAMP;
     }
 }

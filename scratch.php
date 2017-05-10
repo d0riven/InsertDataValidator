@@ -20,4 +20,4 @@ $pdo = new PDO($dsn, 'root', '', [
 
 $v = new \InsertDataValidator\Validator();
 
-$v->validate($pdo, 'a', ['id' => '1', 'data' => '1.4'], []);
+$v->validate($pdo, 'a', ['id' => '1', 'data' => '1'], []);

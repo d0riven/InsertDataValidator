@@ -2,111 +2,102 @@
 
 namespace InsertDataValidator;
 
-use Exception;
-use InsertDataValidator\Exception\UnsupportedTypeException;
-use PDO;
-use Respect\Validation\Exceptions\ValidationException;
+use InsertDataValidator\Exception\ValidationException;
+use InsertDataValidator\MySql\ColumnMetaData;
 use Respect\Validation\Validator as RespectValidation;
 
 class Validator
 {
-    public function validate(PDO $pdo, $tableName, array $insertData, array $ignoreValidationColumns = [])
+    public function validate(\PDO $pdo, $tableName, array $insertData, array $ignoreValidationColumns = [])
     {
         $errors = [];
-        $schema = $this->fetchTableSchema($pdo, $tableName);
+        $factory = FactoryGenerator::generateFactoryByPdo($pdo);
+
+        $columnMetaDataSet = array_map(function ($metaData) use ($factory) {
+            return $factory->createColumnMetaData($metaData);
+        }, $factory->createMetaDataFetcher()->fetchTableDefinition($pdo, $tableName));
+
         // Format validation
-        foreach ($schema as $c) {
-            $columnName = $c['field'];
+        /** @var $c ColumnMetaData */
+        foreach ($columnMetaDataSet as $c) {
+            $columnName = $c->getColumnName();
             if (array_key_exists($columnName, $insertData) === false ||
                 in_array($columnName, $ignoreValidationColumns, true)
             ) {
                 continue;
             }
             try {
-                $this->validateByColumnMetaData($c, $insertData[$columnName], $columnName);
-            } catch (ValidationException $e) {
+                $this->validateByColumnMetaData($c, $insertData[$columnName]);
+            } catch (\Respect\Validation\Exceptions\ValidationException $e) {
                 $errors[] = sprintf('`%s` is not valid. reason = [%s]', $columnName, $e->getMainMessage());
             }
         }
+
         // ghost column validation
-        $tableColumns = array_map(function ($c) {
-            return strtolower($c);
-        }, array_column($schema, 'field'));
+        $tableColumns = array_map(function (ColumnMetaDataInterface $c) {
+            return $c->getColumnName();
+        }, $columnMetaDataSet);
         $ghostColumns = array_diff(array_keys($insertData), $tableColumns);
         if (count($ghostColumns) > 0) {
             $errors[] = sprintf('Insert data has ghost column. ghosts = [`%s`]', implode('`,`', $ghostColumns));
         }
 
         if ($errors !== []) {
-            // TODO implements original Exception
-            throw new Exception(
+            throw new ValidationException(
                 sprintf('Exists violation of table schema. table_name = %s, errors = %s',
                     $tableName, print_r($errors, true))
             );
         }
     }
 
-    public function fetchTableSchema(PDO $pdo, $tableName)
+    private function validateByColumnMetaData(ColumnMetaDataInterface $metaData, $insertValue)
     {
-        $stmt = $pdo->query("SHOW COLUMNS FROM $tableName");
-        return $stmt->fetchAll(PDO::FETCH_ASSOC);
-    }
-
-    function validateByColumnMetaData($metaData, $insertValue, $columnName)
-    {
-        //$c['field'], $c['type'], $c['null'], $c['default'];
-        /** @var RespectValidation $v */
-        $v = null;
-        // null許容のルール
-        if ($metaData['null'] === 'YES' && $insertValue === null) {
-            // データがnullならvalidationを掛けると逆に怒られるので早期リターン
+        if ($metaData->isAllowableNull() && $insertValue === null) {
+            // validation does not enable if data is null, so cannot validate value of null.
             return;
         }
-        if ($metaData['null'] === 'NO' && $insertValue === null) {
-            throw new ValidationException(sprintf('`%s` column must be not null', $columnName));
+        if ($metaData->isAllowableNull() === false && $insertValue === null) {
+            throw new ValidationException(sprintf('`%s` column must be not null', $metaData->getColumnName()));
         }
-        // ここから下はnullじゃないデータがはいってくるはず
 
-        // 型のルール
-        $schemaType = $metaData['type'];
-        $column = new Column();
-        $dataType = $column->extractDataType($schemaType);
-        try {
-            $type = $column->getRoughlyType($dataType);
-        } catch (UnsupportedTypeException $e) {
-            // memo この例外の処理は利用者に任せるべきか？
-            return;
-        }
-        $isUnsigned = $column->isUnsigned($schemaType);
-        switch ($type) {
-            case Column::TYPE_INTEGER:
-                $v = $column->extractMaxLength($schemaType) === 1 ? RespectValidation::boolVal() : RespectValidation::intVal();
-                break;
-            case Column::TYPE_DECIMAL:
-                $v = RespectValidation::floatVal();
-                break;
-            case Column::TYPE_STRING:
-                // 文字列の場合は文字列長のルールも規定に入れる
-                $v = RespectValidation::stringType()->length(null, $column->extractMaxLength($schemaType), true);
-                break;
-            case Column::TYPE_DATE:
-                $v = RespectValidation::date('Y-m-d');
-                break;
-            case Column::TYPE_DATETIME:
-            case Column::DATA_TYPE_TIMESTAMP:
-                $v = RespectValidation::date('Y-m-d H:i:s');
-                break;
-            case Column::TYPE_TIME:
-                $v = RespectValidation::date('H:i:s');
-                break;
-            case Column::TYPE_YEAR:
-                $v = $column->extractMaxLength($schemaType) === 4 ? RespectValidation::date('Y') : RespectValidation::date('y');
-                break;
-        }
-        assert($dataType !== null, 'Unexpected type. type = ' . $dataType);
-        // 値域のルール
-        $v->between($column->getMinValue($dataType, $isUnsigned), $column->getMaxValue($dataType, $isUnsigned), true);
+        $dataType = $metaData->extractDataType();
+
+        // build rule
+        $v = $this->buildValidationByDataType($dataType, $metaData);
+        $v->between($metaData->getMinValue($dataType), $metaData->getMaxValue($dataType), true);
 
         $v->check($insertValue);
+    }
+
+    private function buildValidationByDataType($dataType, ColumnMetaDataInterface $metaData)
+    {
+        /** @var RespectValidation $v */
+        $v = null;
+        $type = $metaData->getRoughlyType($dataType);
+        switch ($type) {
+            case ColumnMetaDataInterface::TYPE_INTEGER:
+                $v = $metaData->extractMaxLength() === 1 ? RespectValidation::boolVal() : RespectValidation::intVal();
+                break;
+            case ColumnMetaDataInterface::TYPE_DECIMAL:
+                $v = RespectValidation::floatVal();
+                break;
+            case ColumnMetaDataInterface::TYPE_STRING:
+                // 文字列の場合は文字列長のルールも規定に入れる
+                $v = RespectValidation::stringType()->length(null, $metaData->extractMaxLength(), true);
+                break;
+            case ColumnMetaDataInterface::TYPE_DATE:
+                $v = RespectValidation::date('Y-m-d');
+                break;
+            case ColumnMetaDataInterface::TYPE_DATETIME:
+                $v = RespectValidation::date('Y-m-d H:i:s');
+                break;
+            case ColumnMetaDataInterface::TYPE_TIME:
+                $v = RespectValidation::date('H:i:s');
+                break;
+            case ColumnMetaDataInterface::TYPE_YEAR:
+                $v = $metaData->extractMaxLength() === 4 ? RespectValidation::date('Y') : RespectValidation::date('y');
+                break;
+        }
+        return $v;
     }
 }

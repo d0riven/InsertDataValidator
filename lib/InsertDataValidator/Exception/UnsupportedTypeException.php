@@ -2,6 +2,6 @@
 
 namespace InsertDataValidator\Exception;
 
-class UnsupportedTypeException extends \LogicException
+class UnsupportedTypeException extends UnsupportedException
 {
 }
