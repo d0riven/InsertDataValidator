@@ -55,7 +55,7 @@ class ColumnMetaData implements ColumnMetaDataInterface
         self::DATA_TYPE_DATE      => '9999-12-31',
         // TODO support fraction with greater than MySQL5.6
         self::DATA_TYPE_DATETIME  => '9999-12-31 23:59:59',
-        self::DATA_TYPE_TIME      => '838:59:59',
+        //self::DATA_TYPE_TIME      => '838:59:59',
         self::DATA_TYPE_TIMESTAMP => '2038-01-19 03:14:07',
     ];
 
@@ -72,7 +72,7 @@ class ColumnMetaData implements ColumnMetaDataInterface
         self::DATA_TYPE_DATE      => '1000-01-01',
         // TODO support fraction with greater than MySQL5.6
         self::DATA_TYPE_DATETIME  => '1000-01-01 00:00:00',
-        self::DATA_TYPE_TIME      => '-838:59:59',
+        //self::DATA_TYPE_TIME      => '-838:59:59',
         self::DATA_TYPE_TIMESTAMP => '1970-01-01 00:00:01',
     ];
 
@@ -99,13 +99,13 @@ class ColumnMetaData implements ColumnMetaDataInterface
 
     public function extractDataType()
     {
-        if (preg_match('/^(.*?)(\(.+\))?$/', $this->schemaType, $matches)) {
+        if (preg_match('/^(.*?)(\(.+\))?( unsigned)?$/', $this->schemaType, $matches)) {
             return $matches[1];
         }
         assert(false, 'Unexpected schemaType format. schemaType = ' . $this->schemaType);
     }
 
-    public function extractMaxLength()
+    public function extractSize()
     {
         if (preg_match('/^.*\((\d+)\).*$/', $this->schemaType, $matches)) {
             return (int)$matches[1];
@@ -121,7 +121,7 @@ class ColumnMetaData implements ColumnMetaDataInterface
 
     public function isUnsigned()
     {
-        return stripos('unsigned', $this->schemaType) !== false;
+        return stripos($this->schemaType, 'unsigned') !== false;
     }
 
     public function getMinValue($dataType)
@@ -155,16 +155,19 @@ class ColumnMetaData implements ColumnMetaDataInterface
         if ($this->isTypeOfDate($dataType)) {
             return self::TYPE_DATE;
         }
-        if ($this->isTypeOfDateTime($dataType)) {
+        if ($this->isTypeOfDateTime($dataType) ||
+            $this->isTypeOfTimeStamp($dataType)
+        ) {
             return self::TYPE_DATETIME;
         }
-        if ($this->isTypeOfTime($dataType)) {
-            return self::TYPE_TIME;
-        }
+//        if ($this->isTypeOfTime($dataType)) {
+//            return self::TYPE_TIME;
+//        }
         if ($this->isTypeOfYear($dataType)) {
-            return self::TYPE_DATE;
+            return self::TYPE_YEAR;
         }
         if (
+            $this->isTypeOfTime($dataType) ||
             $this->isTypeOfBit($dataType) ||
             $this->isTypeOfBinary($dataType) ||
             $this->isTypeOfVarBinary($dataType) ||
@@ -172,7 +175,7 @@ class ColumnMetaData implements ColumnMetaDataInterface
             $this->isTypeOfText($dataType) ||
             $this->isTypeOfMediumText($dataType) ||
             $this->isTypeOfLongText($dataType) ||
-            $this->isTypeOfTinyBinary($dataType) ||
+            $this->isTypeOfTinyBlob($dataType) ||
             $this->isTypeOfBlob($dataType) ||
             $this->isTypeOfMediumBlob($dataType) ||
             $this->isTypeOfLongBlob($dataType) ||
@@ -245,14 +248,19 @@ class ColumnMetaData implements ColumnMetaDataInterface
         return $dataType === self::DATA_TYPE_DATETIME;
     }
 
-    public function isTypeOfTime($dataType)
+    public function isTypeOfTimeStamp($dataType)
     {
-        return $dataType === self::DATA_TYPE_TIME;
+        return $dataType === self::DATA_TYPE_TIMESTAMP;
     }
 
     public function isTypeOfYear($dataType)
     {
         return $dataType === self::DATA_TYPE_YEAR;
+    }
+
+    public function isTypeOfTime($dataType)
+    {
+        return $dataType === self::DATA_TYPE_TIME;
     }
 
     public function isTypeOfBit($dataType)
@@ -290,7 +298,7 @@ class ColumnMetaData implements ColumnMetaDataInterface
         return $dataType === self::DATA_TYPE_LONGTEXT;
     }
 
-    public function isTypeOfTinyBinary($dataType)
+    public function isTypeOfTinyBlob($dataType)
     {
         return $dataType === self::DATA_TYPE_TINYBLOB;
     }
@@ -328,10 +336,5 @@ class ColumnMetaData implements ColumnMetaDataInterface
     public function isAllowableNull()
     {
         return $this->allowableNull === 'yes';
-    }
-
-    public function isTypeOfTimeStamp($dataType)
-    {
-        return $dataType === self::DATA_TYPE_TIMESTAMP;
     }
 }

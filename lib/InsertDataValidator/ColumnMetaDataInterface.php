@@ -23,7 +23,7 @@ interface ColumnMetaDataInterface
     public function getMaxValue($dataType);
     public function getMinValue($dataType);
     public function extractDataType();
-    public function extractMaxLength();
+    public function extractSize();
     public function getColumnName();
     public function isAllowableNull();
     public function isUnsigned();

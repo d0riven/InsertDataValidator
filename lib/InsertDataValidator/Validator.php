@@ -8,8 +8,19 @@ use Respect\Validation\Validator as RespectValidation;
 
 class Validator
 {
+    /**
+     * @param \PDO $pdo
+     * @param $tableName
+     * @param array $insertData
+     * @param array $ignoreValidationColumns
+     * @throws ValidationException
+     */
     public function validate(\PDO $pdo, $tableName, array $insertData, array $ignoreValidationColumns = [])
     {
+        if ($insertData === []) {
+            throw new ValidationException('Insert data is empty');
+        }
+
         $errors = [];
         $factory = FactoryGenerator::generateFactoryByPdo($pdo);
 
@@ -21,6 +32,7 @@ class Validator
         /** @var $c ColumnMetaData */
         foreach ($columnMetaDataSet as $c) {
             $columnName = $c->getColumnName();
+            // TODO auto ignore unsupported data type
             if (array_key_exists($columnName, $insertData) === false ||
                 in_array($columnName, $ignoreValidationColumns, true)
             ) {
@@ -72,18 +84,17 @@ class Validator
     private function buildValidationByDataType($dataType, ColumnMetaDataInterface $metaData)
     {
         /** @var RespectValidation $v */
-        $v = null;
         $type = $metaData->getRoughlyType($dataType);
         switch ($type) {
             case ColumnMetaDataInterface::TYPE_INTEGER:
-                $v = $metaData->extractMaxLength() === 1 ? RespectValidation::boolVal() : RespectValidation::intVal();
+                $v = $metaData->extractSize() === 1 ? RespectValidation::boolVal() : RespectValidation::intVal();
                 break;
             case ColumnMetaDataInterface::TYPE_DECIMAL:
                 $v = RespectValidation::floatVal();
                 break;
             case ColumnMetaDataInterface::TYPE_STRING:
                 // 文字列の場合は文字列長のルールも規定に入れる
-                $v = RespectValidation::stringType()->length(null, $metaData->extractMaxLength(), true);
+                $v = RespectValidation::stringType()->length(null, $metaData->extractSize(), true);
                 break;
             case ColumnMetaDataInterface::TYPE_DATE:
                 $v = RespectValidation::date('Y-m-d');
@@ -91,11 +102,11 @@ class Validator
             case ColumnMetaDataInterface::TYPE_DATETIME:
                 $v = RespectValidation::date('Y-m-d H:i:s');
                 break;
-            case ColumnMetaDataInterface::TYPE_TIME:
-                $v = RespectValidation::date('H:i:s');
-                break;
+//            case ColumnMetaDataInterface::TYPE_TIME:
+//                $v = RespectValidation::date('B:i:s');
+//                break;
             case ColumnMetaDataInterface::TYPE_YEAR:
-                $v = $metaData->extractMaxLength() === 4 ? RespectValidation::date('Y') : RespectValidation::date('y');
+                $v = $metaData->extractSize() === 4 ? RespectValidation::date('Y') : RespectValidation::date('y');
                 break;
         }
         return $v;
