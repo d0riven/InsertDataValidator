@@ -1,0 +1,23 @@
+{
+  "name": "doriven/InsertDataValidator",
+  "description": "Validation insert to database",
+  "minimum-stability": "rc",
+  "license": "BSD Style",
+  "authors": [
+    {
+      "name": "Yuki Niitsuma",
+      "email": "wega315@gmail.com"
+    }
+  ],
+  "autoload": {
+    "psr-0": {
+      "InsertDataValidator": "./lib"
+    }
+  },
+  "require": {
+    "respect/validation": "~1.1.12"
+  },
+  "require-dev": {
+    "codeception/codeception": "~2.2.10"
+  }
+}
