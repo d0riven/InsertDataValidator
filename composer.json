@@ -1,7 +1,7 @@
 {
-  "name": "doriven/InsertDataValidator",
-  "description": "Validation insert to database",
-  "minimum-stability": "rc",
+  "name": "doriven/insert-data-validator",
+  "description": "Validation data before insert to database",
+  "minimum-stability": "RC",
   "license": "BSD Style",
   "authors": [
     {
