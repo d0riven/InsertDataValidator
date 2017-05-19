@@ -1,0 +1,14 @@
+class_name: Unit_with_dbTester
+modules:
+    enabled:
+        - Asserts
+        - Db:
+            # Example of database configure(docker)
+            dsn: 'mysql:host=127.0.0.1;dbname=insert_data_validator'
+            user: 'anonymous'
+            password: 'suomynona'
+            dump: 'tests/_data/dump_mysql.sql'
+            populate: true
+            cleanup: false
+            reconnect: true
+        - \Helper\Unit

@@ -1,0 +1,13 @@
+version: '2.1'
+services:
+  # TODO check multiversion
+  mysql:
+    image: mysql:5.5
+    ports:
+      - 3306:3306
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_USER: anonymous
+      MYSQL_PASSWORD: suomynona
+      MYSQL_DATABASE: insert_data_validator
+    # healthcheck: TODO @see https://github.com/docker-library/healthcheck/blob/master/mysql/docker-healthcheck

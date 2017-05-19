@@ -18,6 +18,6 @@
     "respect/validation": "~1.1.12"
   },
   "require-dev": {
-    "codeception/codeception": "2.2.10"
+    "codeception/codeception": "~2.2.10"
   }
 }
