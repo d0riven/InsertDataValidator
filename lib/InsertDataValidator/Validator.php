@@ -2,6 +2,7 @@
 
 namespace InsertDataValidator;
 
+use InsertDataValidator\Exception\UnsupportedTypeException;
 use InsertDataValidator\Exception\ValidationException;
 use InsertDataValidator\MySql\ColumnMetaData;
 use Respect\Validation\Validator as RespectValidation;
@@ -32,7 +33,6 @@ class Validator
         /** @var $c ColumnMetaData */
         foreach ($columnMetaDataSet as $c) {
             $columnName = $c->getColumnName();
-            // TODO auto ignore unsupported data type
             if (array_key_exists($columnName, $insertData) === false ||
                 in_array($columnName, $ignoreValidationColumns, true)
             ) {
@@ -40,6 +40,9 @@ class Validator
             }
             try {
                 $this->validateByColumnMetaData($c, $insertData[$columnName]);
+            } catch (UnsupportedTypeException $e) {
+                // Ignore validation of this column if is unsupported type exception.
+                continue;
             } catch (\Respect\Validation\Exceptions\ValidationException $e) {
                 $errors[] = sprintf('`%s` is not valid. reason = [%s]', $columnName, $e->getMainMessage());
             }
@@ -74,9 +77,7 @@ class Validator
 
         $dataType = $metaData->extractDataType();
 
-        // build rule
         $v = $this->buildValidationByDataType($dataType, $metaData);
-        $v->between($metaData->getMinValue($dataType), $metaData->getMaxValue($dataType), true);
 
         $v->check($insertValue);
     }
@@ -108,6 +109,9 @@ class Validator
             case ColumnMetaDataInterface::TYPE_YEAR:
                 $v = $metaData->extractSize() === 4 ? RespectValidation::date('Y') : RespectValidation::date('y');
                 break;
+        }
+        if ($type !== ColumnMetaDataInterface::TYPE_STRING) {
+            $v->between($metaData->getMinValue($dataType), $metaData->getMaxValue($dataType), true);
         }
         return $v;
     }
