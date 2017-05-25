@@ -1,4 +1,3 @@
-/* Replace this file with actual dump of your database */
 CREATE TABLE IF NOT EXISTS test_type_range (
   `d_bit` BIT,
 
@@ -51,6 +50,11 @@ CREATE TABLE IF NOT EXISTS test_type_range (
 
   `d_enum` ENUM('one', 'two', 'three'),
   `d_set` SET('one', 'two', 'three')
+) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+CREATE TABLE IF NOT EXISTS test_type_length (
+  `d_char` CHAR(32),
+  `d_varchar` VARCHAR(32)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
 
 CREATE TABLE IF NOT EXISTS test_null (
